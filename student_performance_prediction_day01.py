@@ -427,5 +427,334 @@ Today, I completed data preprocessing, feature selection, training and testing, 
 **Result:** Random Forest performed better than Linear Regression on the current test set, with an MAE of 2.998, RMSE of 3.795, and R² score of 0.298.
 
 **Next plan:** Improve model performance, test additional regression algorithms, and develop a simple web application for student grade prediction.
+
+Day 3 — Model Improvement & Prediction Analysis
+"""
+
+# Check which model variables exist
+print("rf_model exists:", "rf_model" in globals())
+print("rf_pipeline exists:", "rf_pipeline" in globals())
+print("random_forest_model exists:", "random_forest_model" in globals())
+print("rf_pred exists:", "rf_pred" in globals())
+
+print("Dataset loaded:", "df" in globals())
+print("Features loaded:", "X" in globals())
+print("Training data loaded:", "X_train" in globals())
+
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Prepare data
+y = df["G3"]
+X = df.drop(columns=["G1", "G2", "G3"])
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+# Separate numerical and categorical columns
+numeric_features = X_train.select_dtypes(include="number").columns
+categorical_features = X_train.select_dtypes(exclude="number").columns
+
+preprocessor = ColumnTransformer([
+    ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_features),
+    ("num", "passthrough", numeric_features)
+])
+
+# Train Random Forest
+rf_model = Pipeline([
+    ("preprocessor", preprocessor),
+    ("model", RandomForestRegressor(
+        n_estimators=100, random_state=42
+    ))
+])
+
+rf_model.fit(X_train, y_train)
+
+# Evaluate the model
+rf_pred = rf_model.predict(X_test)
+
+print("MAE:", round(mean_absolute_error(y_test, rf_pred), 3))
+print("RMSE:", round(np.sqrt(mean_squared_error(y_test, rf_pred)), 3))
+print("R2 Score:", round(r2_score(y_test, rf_pred), 3))
+
+# Calculate prediction errors
+errors = y_test - rf_pred
+
+print("Mean Absolute Error:", round(np.mean(np.abs(errors)), 3))
+print("Average Prediction Error:", round(np.mean(errors), 3))
+
+# Plot error distribution
+plt.figure(figsize=(8, 5))
+plt.hist(errors, bins=15, edgecolor="black")
+plt.title("Random Forest Prediction Error Distribution")
+plt.xlabel("Actual Grade - Predicted Grade")
+plt.ylabel("Number of Students")
+plt.grid(axis="y", alpha=0.3)
+plt.show()
+
+from sklearn.model_selection import cross_val_score
+
+cv_scores = cross_val_score(
+    rf_model, X_train, y_train, cv=5, scoring="r2"
+)
+
+print("R2 scores for 5 folds:", np.round(cv_scores, 3))
+print("Mean CV R2:", round(cv_scores.mean(), 3))
+print("Standard deviation:", round(cv_scores.std(), 3))
+
+from sklearn.model_selection import GridSearchCV
+
+param_grid = {
+    "model__n_estimators": [100, 200],
+    "model__max_depth": [None, 10, 20],
+    "model__min_samples_split": [2, 5],
+    "model__min_samples_leaf": [1, 2]
+}
+
+grid_search = GridSearchCV(
+    estimator=rf_model,
+    param_grid=param_grid,
+    cv=3,
+    scoring="r2",
+    n_jobs=-1,
+    verbose=1
+)
+
+grid_search.fit(X_train, y_train)
+
+print("Best Parameters:")
+print(grid_search.best_params_)
+
+print("Best Cross-Validation R2:",
+      round(grid_search.best_score_, 3))
+
+best_rf_model = grid_search.best_estimator_
+
+tuned_pred = best_rf_model.predict(X_test)
+
+print("Tuned Model MAE:",
+      round(mean_absolute_error(y_test, tuned_pred), 3))
+
+print("Tuned Model RMSE:",
+      round(np.sqrt(mean_squared_error(y_test, tuned_pred)), 3))
+
+print("Tuned Model R2:",
+      round(r2_score(y_test, tuned_pred), 3))
+
+import pandas as pd
+import matplotlib.pyplot as plt
+
+comparison = pd.DataFrame({
+    "Model": ["Original Random Forest", "Tuned Random Forest"],
+    "MAE": [2.998, 3.108],
+    "RMSE": [3.795, 3.910],
+    "R2 Score": [0.298, 0.254]
+})
+
+display(comparison)
+
+comparison.set_index("Model")[["MAE", "RMSE", "R2 Score"]].plot(
+    kind="bar", figsize=(10, 5)
+)
+
+plt.title("Original vs Tuned Random Forest")
+plt.ylabel("Metric Value")
+plt.xticks(rotation=0)
+plt.grid(axis="y", alpha=0.3)
+plt.show()
+
+# Get feature importance from the original Random Forest
+rf_estimator = rf_model.named_steps["model"]
+preprocessor = rf_model.named_steps["preprocessor"]
+
+feature_names = preprocessor.get_feature_names_out()
+importances = rf_estimator.feature_importances_
+
+importance_df = pd.DataFrame({
+    "Feature": feature_names,
+    "Importance": importances
+})
+
+importance_df = importance_df.sort_values(
+    by="Importance", ascending=False
+)
+
+print("Top 10 Important Features:")
+display(importance_df.head(10))
+
+# Plot top 10 features
+top_features = importance_df.head(10).sort_values("Importance")
+
+plt.figure(figsize=(9, 6))
+plt.barh(top_features["Feature"], top_features["Importance"])
+plt.title("Top 10 Features Influencing Student Grade Predictions")
+plt.xlabel("Feature Importance")
+plt.ylabel("Feature")
+plt.tight_layout()
+plt.show()
+
+actual_vs_predicted = pd.DataFrame({
+    "Actual Grade": y_test.values,
+    "Predicted Grade": np.round(rf_pred, 2),
+    "Absolute Error": np.round(
+        np.abs(y_test.values - rf_pred), 2
+    )
+})
+
+display(actual_vs_predicted.head(15))
+
+plt.figure(figsize=(7, 6))
+plt.scatter(y_test, rf_pred, alpha=0.7)
+
+# Ideal prediction line
+plt.plot([0, 20], [0, 20], linestyle="--")
+
+plt.title("Actual vs Predicted Student Grades")
+plt.xlabel("Actual Grade")
+plt.ylabel("Predicted Grade")
+plt.xlim(0, 20)
+plt.ylim(0, 20)
+plt.grid(alpha=0.3)
+plt.show()
+
+print(
+    "Predictions within 2 grade points:",
+    round((np.abs(y_test.values - rf_pred) <= 2).mean() * 100, 2),
+    "%"
+)
+
+# Select one student from the test dataset
+sample_student = X_test.iloc[[0]]
+actual_grade = y_test.iloc[0]
+
+predicted_grade = rf_model.predict(sample_student)[0]
+
+print("Student Input:")
+display(sample_student)
+
+print("Actual Grade:", actual_grade)
+print("Predicted Grade:", round(predicted_grade, 2))
+print(
+    "Prediction Error:",
+    round(abs(actual_grade - predicted_grade), 2),
+    "grade points"
+)
+
+importance_df.to_csv("student_feature_importance.csv", index=False)
+
+actual_vs_predicted.to_csv(
+    "student_prediction_results.csv", index=False
+)
+
+print("Feature importance and prediction results saved!")
+
+# Compare actual and predicted grades
+actual_vs_predicted = pd.DataFrame({
+    "Actual Grade": y_test.values,
+    "Predicted Grade": np.round(rf_pred, 2),
+    "Absolute Error": np.round(
+        np.abs(y_test.values - rf_pred), 2
+    )
+})
+
+display(actual_vs_predicted.head(15))
+
+# Scatter plot
+plt.figure(figsize=(7, 6))
+plt.scatter(y_test, rf_pred, alpha=0.7)
+plt.plot([0, 20], [0, 20], linestyle="--")
+
+plt.title("Actual vs Predicted Student Grades")
+plt.xlabel("Actual Grade")
+plt.ylabel("Predicted Grade")
+plt.xlim(0, 20)
+plt.ylim(0, 20)
+plt.grid(alpha=0.3)
+plt.show()
+
+# Calculate predictions within 2 grade points
+within_two = (
+    np.abs(y_test.values - rf_pred) <= 2
+).mean() * 100
+
+print("Predictions within 2 grade points:",
+      round(within_two, 2), "%")
+
+# Analyze prediction errors by actual grade range
+results = pd.DataFrame({
+    "Actual": y_test.values,
+    "Predicted": rf_pred
+})
+
+results["Grade Range"] = pd.cut(
+    results["Actual"],
+    bins=[-1, 5, 10, 15, 20],
+    labels=["0–5", "6–10", "11–15", "16–20"]
+)
+
+results["Absolute Error"] = abs(
+    results["Actual"] - results["Predicted"]
+)
+
+grade_analysis = results.groupby(
+    "Grade Range", observed=False
+).agg(
+    Student_Count=("Actual", "count"),
+    Mean_Absolute_Error=("Absolute Error", "mean")
+).round(2)
+
+display(grade_analysis)
+
+grade_analysis["Mean_Absolute_Error"].plot(
+    kind="bar", figsize=(8, 5)
+)
+
+plt.title("Prediction Error by Actual Grade Range")
+plt.xlabel("Actual Grade Range")
+plt.ylabel("Mean Absolute Error")
+plt.xticks(rotation=0)
+plt.grid(axis="y", alpha=0.3)
+plt.show()
+
+"""## Day 3 — Model Improvement and Prediction Analysis
+
+**Objective:** To evaluate the Random Forest model, analyze prediction errors, perform cross-validation, and experiment with hyperparameter tuning.
+
+**Tasks Completed:**
+1. Analyzed the distribution of prediction errors.
+2. Performed 5-fold cross-validation.
+3. Tuned Random Forest hyperparameters using GridSearchCV.
+4. Compared the original and tuned models.
+5. Visualized feature importance and actual versus predicted grades.
+6. Tested individual student grade predictions.
+7. Analyzed prediction errors across different grade ranges.
+8. Exported feature importance and prediction results to CSV files.
+
+**Original Random Forest Results:**
+- MAE: 2.998
+- RMSE: 3.795
+- R² Score: 0.298
+- Mean cross-validation R²: 0.273
+
+**Tuning Results:**
+
+The tuned model achieved an MAE of 3.108, RMSE of 3.910, and R² of 0.254. The original Random Forest model performed better on the test set.
+
+**Additional Analysis:**
+
+One sample student's actual grade was 10, while the predicted grade was 9.46, giving an error of 0.54 points. Approximately 43.04% of test predictions were within two grade points of the actual grade. The model performed best in the 11–15 grade range and had higher errors for extreme grades.
+
+**Conclusion:**
+
+I learned how to evaluate regression models, use cross-validation, tune hyperparameters, analyze feature importance, and identify weaknesses through error analysis. Although tuning did not improve the baseline model, the experiments helped me understand how to assess model performance and identify opportunities for further improvement.
+
+**Next Step:** Develop a simple web application for interactive student grade prediction.
 """
 
