@@ -12,8 +12,6 @@ print("Project: Student Performance Prediction System")
 print("Environment: Google Colab")
 print("Day: 01")
 
-
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -131,5 +129,303 @@ Perform further data analysis, select appropriate input features, prepare the da
 
 ### Dataset Note
 This dataset is currently being used for practice. Approval from the internship mentor is required before treating it as the final project dataset.
+
+# Day 02 — Feature Analysis and Data Preprocessing
+
+## Objectives
+1. Analyze important student performance features.
+2. Understand the relationship between features and final grades.
+3. Select input features and the target variable.
+4. Prepare the dataset for machine learning.
+5. Plan a training and testing strategy.
+"""
+
+import pandas as pd
+
+df = pd.read_csv("/content/student-mat.csv", sep=";")
+
+print("Dataset loaded successfully!")
+print("Dataset shape:", df.shape)
+
+display(df.head())
+
+# Select target variable
+y = df["G3"]
+
+# Select input features
+X = df.drop(columns=["G1", "G2", "G3"])
+
+print("Input features:", X.shape)
+print("Target shape:", y.shape)
+
+print("\nFeature columns:")
+print(X.columns.tolist())
+
+print("\nTarget variable: G3")
+
+# Identify numerical and categorical features
+numeric_features = X.select_dtypes(
+    include=["int64", "float64"]
+).columns.tolist()
+
+categorical_features = X.select_dtypes(
+    include=["object", "category"]
+).columns.tolist()
+
+print("Numerical features:", len(numeric_features))
+print(numeric_features)
+
+print("\nCategorical features:", len(categorical_features))
+print(categorical_features)
+
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.2,
+    random_state=42
+)
+
+print("Training records:", X_train.shape[0])
+print("Testing records:", X_test.shape[0])
+
+print("Training target records:", y_train.shape[0])
+print("Testing target records:", y_test.shape[0])
+
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("categorical", OneHotEncoder(handle_unknown="ignore"),
+         categorical_features),
+        ("numerical", "passthrough", numeric_features)
+    ]
+)
+
+print("Preprocessing pipeline created successfully!")
+
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import numpy as np
+
+# Create the complete ML pipeline
+model = Pipeline([
+    ("preprocessing", preprocessor),
+    ("regression", LinearRegression())
+])
+
+# Train the model
+model.fit(X_train, y_train)
+
+print("Linear Regression model trained successfully!")
+
+# Predict grades for unseen test records
+y_pred = model.predict(X_test)
+
+# Calculate evaluation metrics
+mae = mean_absolute_error(y_test, y_pred)
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+r2 = r2_score(y_test, y_pred)
+
+print("Model Evaluation Results")
+print("------------------------")
+print(f"MAE:  {mae:.2f}")
+print(f"RMSE: {rmse:.2f}")
+print(f"R2 Score: {r2:.3f}")
+
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(7, 5))
+
+plt.scatter(y_test, y_pred, alpha=0.7)
+plt.plot([0, 20], [0, 20], "r--")
+
+plt.xlabel("Actual Final Grade")
+plt.ylabel("Predicted Final Grade")
+plt.title("Actual vs Predicted Student Grades")
+plt.xlim(0, 20)
+plt.ylim(0, 20)
+plt.grid(alpha=0.3)
+
+plt.show()
+
+# Compare actual and predicted grades
+
+comparison = pd.DataFrame({
+    "Actual Grade": y_test.values,
+    "Predicted Grade": y_pred.round(2)
+})
+
+comparison["Absolute Error"] = abs(
+    comparison["Actual Grade"] - comparison["Predicted Grade"]
+)
+
+display(comparison.head(10))
+
+import joblib
+
+joblib.dump(model, "student_performance_model.pkl")
+
+print("Model saved successfully!")
+
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import numpy as np
+
+# Identify numerical and categorical columns
+num_cols = X_train.select_dtypes(include=["int64", "float64"]).columns
+cat_cols = X_train.select_dtypes(include=["object", "category"]).columns
+
+# Preprocess categorical data
+preprocessor = ColumnTransformer([
+    ("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols),
+    ("num", "passthrough", num_cols)
+])
+
+# Create complete Random Forest pipeline
+rf_model = Pipeline([
+    ("preprocessor", preprocessor),
+    ("model", RandomForestRegressor(
+        n_estimators=100,
+        random_state=42
+    ))
+])
+
+# Train model
+rf_model.fit(X_train, y_train)
+
+# Predict grades
+rf_pred = rf_model.predict(X_test)
+
+# Evaluate model
+rf_mae = mean_absolute_error(y_test, rf_pred)
+rf_rmse = np.sqrt(mean_squared_error(y_test, rf_pred))
+rf_r2 = r2_score(y_test, rf_pred)
+
+print("Random Forest Results")
+print("---------------------")
+print("MAE:", round(rf_mae, 2))
+print("RMSE:", round(rf_rmse, 2))
+print("R2 Score:", round(rf_r2, 3))
+
+import joblib
+
+joblib.dump(
+    rf_model,
+    "student_performance_random_forest.pkl"
+)
+
+print("Random Forest model saved successfully!")
+
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Get feature importance from Random Forest
+importance = rf_model.named_steps["model"].feature_importances_
+
+# Get encoded feature names
+feature_names = rf_model.named_steps[
+    "preprocessor"
+].get_feature_names_out()
+
+# Create a sorted table
+importance_df = pd.DataFrame({
+    "Feature": feature_names,
+    "Importance": importance
+})
+
+importance_df = importance_df.sort_values(
+    by="Importance",
+    ascending=False
+)
+
+print("Top 10 Important Features:")
+display(importance_df.head(10))
+
+# Plot top 10 features
+top_features = importance_df.head(10).sort_values(
+    "Importance"
+)
+
+plt.figure(figsize=(9, 5))
+plt.barh(
+    top_features["Feature"],
+    top_features["Importance"]
+)
+
+plt.title("Top 10 Features for Student Grade Prediction")
+plt.xlabel("Feature Importance")
+plt.ylabel("Feature")
+plt.tight_layout()
+plt.show()
+
+# Select one student from the test dataset
+sample_student = X_test.iloc[[0]]
+
+# Predict the final mathematics grade
+predicted_grade = rf_model.predict(sample_student)[0]
+
+print("Student Grade Prediction")
+print("------------------------")
+print("Predicted G3 grade:", round(predicted_grade, 2), "/ 20")
+
+# Compare actual and predicted grades
+actual_grade = y_test.iloc[0]
+predicted_grade = rf_model.predict(X_test.iloc[[0]])[0]
+
+print("Actual Grade:", actual_grade)
+print("Predicted Grade:", round(predicted_grade, 2))
+print("Prediction Error:", round(abs(actual_grade - predicted_grade), 2))
+
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import pandas as pd
+import numpy as np
+
+# Predict using both models
+lr_pred = model.predict(X_test)
+rf_pred = rf_model.predict(X_test)
+
+# Compare model performance
+results = pd.DataFrame({
+    "Model": ["Linear Regression", "Random Forest"],
+    "MAE": [
+        mean_absolute_error(y_test, lr_pred),
+        mean_absolute_error(y_test, rf_pred)
+    ],
+    "RMSE": [
+        np.sqrt(mean_squared_error(y_test, lr_pred)),
+        np.sqrt(mean_squared_error(y_test, rf_pred))
+    ],
+    "R2 Score": [
+        r2_score(y_test, lr_pred),
+        r2_score(y_test, rf_pred)
+    ]
+})
+
+display(results.round(3))
+
+"""## Day 2 Conclusion — Student Performance Prediction
+
+Today, I completed data preprocessing, feature selection, training and testing, and model evaluation for the Student Performance Prediction project.
+
+**Tasks completed:**
+- Loaded and explored the student performance dataset containing 395 records and 33 columns.
+- Identified numerical and categorical features.
+- Prepared the training and testing datasets.
+- Trained Linear Regression and Random Forest regression models.
+- Evaluated both models using MAE, RMSE, and R² score.
+- Compared actual and predicted student grades.
+- Visualized feature importance using Random Forest.
+- Saved the trained models using Joblib.
+
+**Result:** Random Forest performed better than Linear Regression on the current test set, with an MAE of 2.998, RMSE of 3.795, and R² score of 0.298.
+
+**Next plan:** Improve model performance, test additional regression algorithms, and develop a simple web application for student grade prediction.
 """
 
